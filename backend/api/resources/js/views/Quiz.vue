@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useQuizStore } from '@/stores/quiz';
 import { useRouter } from 'vue-router';
 
@@ -16,9 +16,13 @@ const question = computed(() => quiz.currentQuestion);
 const index = computed(() => quiz.currentIndex);
 const total = computed(() => quiz.questions.length);
 
-if (!quiz.quizAttemptId) {
-  router.push('/dashboard');
-}
+onMounted(() => {
+  // try to restore in-progress quiz from localStorage; if none, go back
+  quiz.loadState();
+  if (!quiz.quizAttemptId) {
+    router.push('/dashboard');
+  }
+});
 
 function selectOption(optId) {
   if (disabledOptions.value) return;

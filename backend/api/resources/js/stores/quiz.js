@@ -28,7 +28,10 @@ export const useQuizStore = defineStore('quiz', {
       this.timerRunning = true;
       this.intervalId = setInterval(() => {
         this.timerSeconds += 1;
+        // persist timer frequently so refresh keeps progress
+        this.saveState();
       }, 1000);
+      this.saveState();
     },
     stopTimer() {
       this.timerRunning = false;
@@ -36,6 +39,7 @@ export const useQuizStore = defineStore('quiz', {
         clearInterval(this.intervalId);
         this.intervalId = null;
       }
+      this.saveState();
     },
 
     formatTimer() {
@@ -62,6 +66,8 @@ export const useQuizStore = defineStore('quiz', {
         this.loading = false;
         // start timer when quiz begins
         this.startTimer();
+        // persist new quiz state
+        this.saveState();
         return { ok: true };
       } catch (err) {
         this.loading = false;
@@ -98,6 +104,8 @@ export const useQuizStore = defineStore('quiz', {
         if (!this.isLastQuestion) {
           this.currentIndex += 1;
         }
+        // persist after recording the answer / advancing
+        this.saveState();
         return { ok: true, is_correct };
       } catch (err) {
         this.loading = false;
@@ -120,6 +128,8 @@ export const useQuizStore = defineStore('quiz', {
         });
         // API returns a `summary` with the computed results (correct_answers, wrong_answers, score, time_seconds)
         this.results = res.data.summary ?? res.data;
+        // completed: remove persisted in-progress state
+        try { localStorage.removeItem('quiz_state_v1'); } catch (e) {}
         this.loading = false;
         return { ok: true, results: this.results };
       } catch (err) {
@@ -139,6 +149,45 @@ export const useQuizStore = defineStore('quiz', {
       this.loading = false;
       this.error = null;
       this.results = null;
+      try { localStorage.removeItem('quiz_state_v1'); } catch (e) {}
+    },
+    
+    saveState() {
+      try {
+        const payload = {
+          quizAttemptId: this.quizAttemptId,
+          questions: this.questions,
+          currentIndex: this.currentIndex,
+          answers: this.answers,
+          timerSeconds: this.timerSeconds,
+          timerRunning: this.timerRunning,
+        };
+        localStorage.setItem('quiz_state_v1', JSON.stringify(payload));
+      } catch (e) {
+        // ignore storage errors
+      }
+    },
+
+    loadState() {
+      try {
+        const raw = localStorage.getItem('quiz_state_v1');
+        if (!raw) return false;
+        const parsed = JSON.parse(raw);
+        if (!parsed || !parsed.quizAttemptId) return false;
+        // restore fields
+        this.quizAttemptId = parsed.quizAttemptId;
+        this.questions = parsed.questions || [];
+        this.currentIndex = parsed.currentIndex || 0;
+        this.answers = parsed.answers || [];
+        this.timerSeconds = parsed.timerSeconds || 0;
+        // if timer was running, resume it
+        if (parsed.timerRunning) {
+          this.startTimer();
+        }
+        return true;
+      } catch (e) {
+        return false;
+      }
     },
   },
 });
