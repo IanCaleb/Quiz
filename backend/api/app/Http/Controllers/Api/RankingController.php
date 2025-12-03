@@ -22,7 +22,7 @@ class RankingController extends Controller
             ->map(function ($attempt, $index) {
                 return [
                     'position' => $index + 1,
-                    'user_name' => $attempt->user->name,
+                    'user' => ['name' => $attempt->user->name ?? '—'],
                     'score' => $attempt->best_score,
                     'time_seconds' => $attempt->best_time,
                 ];

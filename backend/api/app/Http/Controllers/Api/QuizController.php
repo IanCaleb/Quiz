@@ -13,7 +13,27 @@ class QuizController extends Controller
 {
     public function start(Request $request)
     {
-        $questions = Question::inRandomOrder()->limit(10)->get();
+        // avoid questions the user has already answered in previous attempts
+        $answeredQuestionIds = QuizAnswer::whereHas('quizAttempt', function ($q) use ($request) {
+            $q->where('user_id', $request->user()->id);
+        })->pluck('question_id')->toArray();
+
+        // try to get up to 10 questions excluding previously answered ones
+        $query = Question::query();
+        if (!empty($answeredQuestionIds)) {
+            $query->whereNotIn('id', $answeredQuestionIds);
+        }
+
+        $questions = $query->inRandomOrder()->limit(10)->get();
+
+        // if not enough new questions remain, fill the rest with any other questions
+        if ($questions->count() < 10) {
+            $needed = 10 - $questions->count();
+            $existingIds = $questions->pluck('id')->toArray();
+            $additional = Question::whereNotIn('id', $existingIds)->inRandomOrder()->limit($needed)->get();
+            // concat maintains uniqueness within this quiz
+            $questions = $questions->concat($additional);
+        }
 
         $quizAttempt = QuizAttempt::create([
             'user_id' => $request->user()->id,
@@ -23,15 +43,19 @@ class QuizController extends Controller
         return response()->json([
             'quiz_attempt_id' => $quizAttempt->id,
             'questions' => $questions->map(function ($question) {
+                $options = [];
+                $options[] = ['id' => 'a', 'option_text' => $question->option_a];
+                $options[] = ['id' => 'b', 'option_text' => $question->option_b];
+                $options[] = ['id' => 'c', 'option_text' => $question->option_c];
+                $options[] = ['id' => 'd', 'option_text' => $question->option_d];
+                if (!empty($question->option_e)) {
+                    $options[] = ['id' => 'e', 'option_text' => $question->option_e];
+                }
+
                 return [
                     'id' => $question->id,
-                    'question' => $question->question,
-                    'options' => [
-                        'a' => $question->option_a,
-                        'b' => $question->option_b,
-                        'c' => $question->option_c,
-                        'd' => $question->option_d,
-                    ],
+                    'question_text' => $question->question,
+                    'options' => $options,
                 ];
             }),
         ]);
@@ -39,11 +63,18 @@ class QuizController extends Controller
 
     public function submitAnswer(Request $request)
     {
-        $request->validate([
+        // Accept either 'option_id' (a|b|c|d|e) or 'answer' for backward compatibility
+        $validated = $request->validate([
             'quiz_attempt_id' => 'required|exists:quiz_attempts,id',
             'question_id' => 'required|exists:questions,id',
-            'answer' => 'required|in:a,b,c,d',
+            'option_id' => 'nullable|in:a,b,c,d,e',
+            'answer' => 'nullable|in:a,b,c,d,e',
         ]);
+
+        $answer = $request->input('option_id') ?? $request->input('answer');
+        if (!$answer) {
+            return response()->json(['error' => 'Answer is required (option_id or answer)'], 422);
+        }
 
         $quizAttempt = QuizAttempt::findOrFail($request->quiz_attempt_id);
 
@@ -56,12 +87,12 @@ class QuizController extends Controller
         }
 
         $question = Question::findOrFail($request->question_id);
-        $isCorrect = $question->correct_answer === $request->answer;
+        $isCorrect = $question->correct_answer === $answer;
 
         QuizAnswer::create([
             'quiz_attempt_id' => $quizAttempt->id,
             'question_id' => $question->id,
-            'user_answer' => $request->answer,
+            'user_answer' => $answer,
             'is_correct' => $isCorrect,
         ]);
 
@@ -73,10 +104,17 @@ class QuizController extends Controller
 
     public function complete(Request $request)
     {
-        $request->validate([
+        // Accept time_seconds or time_spent (frontend uses time_spent)
+        $validated = $request->validate([
             'quiz_attempt_id' => 'required|exists:quiz_attempts,id',
-            'time_seconds' => 'required|integer|min:0',
+            'time_seconds' => 'nullable|integer|min:0',
+            'time_spent' => 'nullable|integer|min:0',
         ]);
+
+        $timeSeconds = $request->input('time_seconds') ?? $request->input('time_spent');
+        if (!is_numeric($timeSeconds)) {
+            return response()->json(['error' => 'time_seconds or time_spent is required'], 422);
+        }
 
         $quizAttempt = QuizAttempt::findOrFail($request->quiz_attempt_id);
 
@@ -96,7 +134,7 @@ class QuizController extends Controller
             'correct_answers' => $correctAnswers,
             'wrong_answers' => $wrongAnswers,
             'score' => $score,
-            'time_seconds' => $request->time_seconds,
+            'time_seconds' => (int)$timeSeconds,
             'completed_at' => now(),
         ]);
 
@@ -106,7 +144,7 @@ class QuizController extends Controller
                 'correct_answers' => $correctAnswers,
                 'wrong_answers' => $wrongAnswers,
                 'score' => $score,
-                'time_seconds' => $request->time_seconds,
+                'time_seconds' => (int)$timeSeconds,
             ],
         ]);
     }

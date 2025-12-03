@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom utilities */
+:root{
+  --primary: #6D28D9;
+  --secondary: #2563EB;
+}
+
+.timer-badge{
+  @apply inline-flex items-center justify-center bg-primary text-white rounded-full px-3 py-1 text-sm;
+}
