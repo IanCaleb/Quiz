@@ -48,9 +48,6 @@ class QuizController extends Controller
                 $options[] = ['id' => 'b', 'option_text' => $question->option_b];
                 $options[] = ['id' => 'c', 'option_text' => $question->option_c];
                 $options[] = ['id' => 'd', 'option_text' => $question->option_d];
-                if (!empty($question->option_e)) {
-                    $options[] = ['id' => 'e', 'option_text' => $question->option_e];
-                }
 
                 return [
                     'id' => $question->id,
@@ -63,12 +60,12 @@ class QuizController extends Controller
 
     public function submitAnswer(Request $request)
     {
-        // Accept either 'option_id' (a|b|c|d|e) or 'answer' for backward compatibility
+        // Accept either 'option_id' (a|b|c|d) or 'answer' for backward compatibility
         $validated = $request->validate([
             'quiz_attempt_id' => 'required|exists:quiz_attempts,id',
             'question_id' => 'required|exists:questions,id',
-            'option_id' => 'nullable|in:a,b,c,d,e',
-            'answer' => 'nullable|in:a,b,c,d,e',
+            'option_id' => 'nullable|in:a,b,c,d',
+            'answer' => 'nullable|in:a,b,c,d',
         ]);
 
         $answer = $request->input('option_id') ?? $request->input('answer');
