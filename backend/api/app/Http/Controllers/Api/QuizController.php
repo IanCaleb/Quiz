@@ -13,12 +13,10 @@ class QuizController extends Controller
 {
     public function start(Request $request)
     {
-        // avoid questions the user has already answered in previous attempts
         $answeredQuestionIds = QuizAnswer::whereHas('quizAttempt', function ($q) use ($request) {
             $q->where('user_id', $request->user()->id);
         })->pluck('question_id')->toArray();
 
-        // try to get up to 10 questions excluding previously answered ones
         $query = Question::query();
         if (!empty($answeredQuestionIds)) {
             $query->whereNotIn('id', $answeredQuestionIds);
@@ -26,7 +24,6 @@ class QuizController extends Controller
 
         $questions = $query->inRandomOrder()->limit(10)->get();
 
-        // if not enough new questions remain, fill the rest with any other questions
         if ($questions->count() < 10) {
             $needed = 10 - $questions->count();
             $existingIds = $questions->pluck('id')->toArray();
@@ -60,7 +57,6 @@ class QuizController extends Controller
 
     public function submitAnswer(Request $request)
     {
-        // Accept either 'option_id' (a|b|c|d) or 'answer' for backward compatibility
         $validated = $request->validate([
             'quiz_attempt_id' => 'required|exists:quiz_attempts,id',
             'question_id' => 'required|exists:questions,id',
@@ -101,7 +97,6 @@ class QuizController extends Controller
 
     public function complete(Request $request)
     {
-        // Accept time_seconds or time_spent (frontend uses time_spent)
         $validated = $request->validate([
             'quiz_attempt_id' => 'required|exists:quiz_attempts,id',
             'time_seconds' => 'nullable|integer|min:0',
