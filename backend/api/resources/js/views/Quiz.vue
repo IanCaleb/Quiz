@@ -30,6 +30,8 @@ function selectOption(optId) {
 async function confirmAnswer() {
   if (!selectedOption.value) return;
   disabledOptions.value = true;
+  // Capture isLastQuestion at THIS moment, not 700ms later
+  const isLastQuestionNow = quiz.isLastQuestion;
   const result = await quiz.submitAnswer(selectedOption.value);
   if (!result.ok) {
     alert(result.error || 'Erro ao enviar resposta');
@@ -40,7 +42,7 @@ async function confirmAnswer() {
   selectedState.value = result.is_correct ? 'correct' : 'wrong';
   // short delay to show color transition then advance or allow finalization
   setTimeout(async () => {
-    if (quiz.isLastQuestion) {
+    if (isLastQuestionNow) {
       // mark that the last question was answered - present Finalizar button
       lastAnswered.value = true;
       // keep disabledOptions true to avoid changing selection
